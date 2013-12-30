@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.drawtest"
+    package="com.joejbh.swapblock"
     android:versionCode="1"
     android:versionName="1.0" >
 
@@ -12,8 +12,8 @@
         android:label="@string/app_name"
         android:theme="@style/AppTheme" >
         <activity
-            android:name=".DrawTestActivity"
-            android:label="@string/title_activity_draw_test" >
+            android:name="com.joejbh.swapblocks.SwapBlocksRunActivity"
+            android:label="@string/title_activity_swap_blocks_run" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
