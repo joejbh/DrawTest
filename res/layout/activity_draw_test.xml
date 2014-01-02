@@ -6,7 +6,7 @@
     android:gravity="right"
     android:orientation="vertical" >
 
-    <TextView
+	<TextView
         android:id="@+id/scoreTextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -14,5 +14,17 @@
         android:textSize="15sp"
         tools:context=".SwapBlocksSurface" />
 
+
+	<view 
+		class="com.joejbh.swapblocks.SwapBlocksSurface"
+		android:id="@+id/swapBlockSurface"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent" />
+ 
+<!--     <com.joejbh.swapblocks.SwapBlocksSurface
+        android:id="@+id/swapBlockSurface"     
+	    android:layout_width="match_parent"     
+	    android:layout_height="match_parent"> 
+ 	</com.joejbh.swapblocks.SwapBlocksSurface> -->
 
 </LinearLayout>

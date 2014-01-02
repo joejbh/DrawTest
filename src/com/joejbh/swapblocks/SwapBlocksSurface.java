@@ -10,6 +10,7 @@ import android.graphics.Point;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.AttributeSet;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -18,11 +19,11 @@ import android.widget.TextView;
 
 public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
-	boolean phaseDebugIsOn = true;
-	boolean matchCheckDebugIsOn = true;
-	boolean tripletColorDebugIsOn = true;
-	boolean moveCounterDebugIsOn = true;
-	boolean phaseStepDebugIsOn = true;
+	boolean phaseDebugIsOn = false;
+	boolean matchCheckDebugIsOn = false;
+	boolean tripletColorDebugIsOn = false;
+	boolean moveCounterDebugIsOn = false;
+	boolean phaseStepDebugIsOn = false;
 	
 	public static final int PHASE_NULL = 0;
 	public static final int PHASE_HANDLE_MOVE = 1;
@@ -82,7 +83,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 	private float movementPixels = 10; // This determines the speed of movement of the
 									// blocks. Higher = faster. Must be divisible into 100
 
-	private int matrixRows, matrixColumns;
+	private int matrixRows, matrixColumns = 5;
 
 	MediaPlayer poofSound;
 	MediaPlayer shrinkSound;
@@ -137,11 +138,26 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 	
 	public SwapBlocksSurface(Context context) {
 		super(context);
-		Log.i("SwapBlockSurface", "About to get Holder");
 		ourHolder = getHolder();
+		
 	}
+	
+	public SwapBlocksSurface(Context context, AttributeSet attributeSet)
+	{
+	    super(context, attributeSet);
+	    ourHolder = getHolder();
+	}
+	
+	
+	public SwapBlocksSurface(Context context, AttributeSet attrs, int defStyle) {
+	    super(context, attrs, defStyle);
+	    ourHolder = getHolder();
+	}
+	
 
 	public void pause() {
+		Log.i("SwapBlockSurface State", "pause()");
+		
 		isRunning = false;
 		while (true) {
 			try {
@@ -160,11 +176,11 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 	// between onPause's
 	// All default values are reset in resume().
 	public void resume() {
-
-		scoreTextView = (TextView) findViewById(R.id.scoreTextView);
+		Log.i("SwapBlockSurface State", "resume()");
+//		scoreTextView = (TextView) findViewById(R.id.scoreTextView);
 
 		isRunning = true;
-
+		
 		// dropColumns might be able to be replaced by the use of a string which
 		// would record which columns have
 		// a drop.
@@ -182,14 +198,14 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 		// A variable used for forcing a wait on the primary thread.
 		long startTime;
-
+		
 		while (isRunning) {
+			
 			if (!ourHolder.getSurface().isValid())
 				continue;
-
+			
 			Canvas canvas = ourHolder.lockCanvas();
 			canvas.drawRGB(74, 92, 128);
-
 			// This prints the full matrix of blocks
 			for (int i = 0; i < matrixRows; i++) {
 				for (int j = 0; j < matrixColumns; j++) {
@@ -198,7 +214,6 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 							myBlockMatrix[i][j].getY(), null);
 				}
 			}
-
 			// If movement has started, act according to what phase it is
 			switch (movementPhase) {
 

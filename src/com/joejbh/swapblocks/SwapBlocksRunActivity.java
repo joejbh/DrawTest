@@ -29,38 +29,22 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		
-		mySwapBlocksSurface = new SwapBlocksSurface(this);
-		mySwapBlocksSurface.setOnTouchListener(this);
+		Log.i("onCrete", "1");
 		
-		display = getWindowManager().getDefaultDisplay();
-
-		size = getSize(display);
-
-		if (size.x > size.y)
-			mySwapBlocksSurface.setMatrixColumns(10);
-		else
-			mySwapBlocksSurface.setMatrixColumns(5);
-
+		setContentView(R.layout.activity_draw_test);
 		
-		mySwapBlocksSurface.setBlockWidth(size.x / mySwapBlocksSurface.getMatrixColumns());
-		mySwapBlocksSurface.setBlockHeight(mySwapBlocksSurface.getBlockWidth());
-
-		mySwapBlocksSurface.setMatrixRows( (size.y / mySwapBlocksSurface.getBlockHeight()) - 1 );
-
-		Log.i("onCreate", "Width = " + size.y);
-		Log.i("onCreate", "Height = " + size.x);
-
+		
+		
+		
 		/*mySwapBlocksSurface.poofSound = MediaPlayer.create(this, R.raw.poof);
 		mySwapBlocksSurface.shrinkSound = MediaPlayer.create(this, R.raw.shrink);
 */
-/*		setContentView(R.layout.activity_draw_test);
 		
-		LinearLayout activityLayout = (LinearLayout) findViewById(R.layout.activity_draw_test);
 		
-		mySwapBlocksSurface.resume();
-		activityLayout.addView(mySwapBlocksSurface);
-		*/
-		setContentView(mySwapBlocksSurface);
+
+
+
+//		setContentView(mySwapBlocksSurface);
 		
 	}
 
@@ -74,6 +58,38 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 	protected void onResume() {
 		super.onResume();
 //		mySwapBlocksSurface.resume();
+		
+//		LinearLayout activityLayout = (LinearLayout) findViewById(R.layout.activity_draw_test);
+		
+		
+	
+		Log.i("onCrete", "2");
+		mySwapBlocksSurface = (SwapBlocksSurface) findViewById(R.id.swapBlockSurface);
+		Log.i("onCrete", "3");
+			
+//		mySwapBlocksSurface = new SwapBlocksSurface(this);
+		
+		mySwapBlocksSurface.setOnTouchListener(this);
+		Log.i("onCrete", "4");
+		display = getWindowManager().getDefaultDisplay();
+		Log.i("onCrete", "5");
+		size = getSize(display);
+		Log.i("onCrete", "6");
+		if (size.x > size.y)
+			mySwapBlocksSurface.setMatrixColumns(10);
+		else
+			mySwapBlocksSurface.setMatrixColumns(5);
+
+		
+		mySwapBlocksSurface.setBlockWidth(size.x / mySwapBlocksSurface.getMatrixColumns());
+		mySwapBlocksSurface.setBlockHeight(mySwapBlocksSurface.getBlockWidth());
+
+		mySwapBlocksSurface.setMatrixRows( (size.y / mySwapBlocksSurface.getBlockHeight()) - 1 );
+
+		Log.i("onCreate", "Width = " + size.y);
+		Log.i("onCreate", "Height = " + size.x);
+		
+		mySwapBlocksSurface.resume();
 	}
 
 	public boolean onTouch(View view, MotionEvent event) {
