@@ -29,7 +29,7 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_draw_test);
 		
-		/*
+		/* Check this:
 		 * Initializing variables for mySwapBlockSurface here rather than onCreate
 		 * Since the view is in the xml file, it will not inflate until after onCreate.
 		 */
