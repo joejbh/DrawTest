@@ -1,14 +1,19 @@
 package com.joejbh.swapblocks;
 
+import java.util.zip.Inflater;
+
 import com.joejbh.swapblocks.R;
 
 import android.os.Bundle;
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Point;
 import android.view.Display;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
+import android.widget.RelativeLayout;
 
 public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 
@@ -23,6 +28,24 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_draw_test);
+		
+		/*
+		 * Initializing variables for mySwapBlockSurface here rather than onCreate
+		 * Since the view is in the xml file, it will not inflate until after onCreate.
+		 */
+		
+		LayoutInflater myInflater = LayoutInflater.from(this);
+		
+		mySwapBlocksSurface = (SwapBlocksSurface) myInflater.inflate(
+				R.id.swapBlockSurface, null, false);
+		
+		
+//		mySwapBlocksSurface = (SwapBlocksSurface) findViewById(R.id.swapBlockSurface);
+		
+		
+		mySwapBlocksSurface.setOnTouchListener(this);
+		mySwapBlocksSurface.resume();
+		
 	}
 
 	@Override
@@ -34,15 +57,6 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 	@Override
 	protected void onResume() {
 		super.onResume();
-		
-		/*
-		 * Initializing variables for mySwapBlockSurface here rather than onCreate because since the view is in the
-		 * xml file, it will not inflate until after onCreate.
-		 */
-		
-		mySwapBlocksSurface = (SwapBlocksSurface) findViewById(R.id.swapBlockSurface);
-		mySwapBlocksSurface.setOnTouchListener(this);
-		mySwapBlocksSurface.resume();
 		
 	}
 
