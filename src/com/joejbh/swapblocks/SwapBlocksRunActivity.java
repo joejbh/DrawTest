@@ -29,23 +29,16 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_draw_test);
 		
-		/* Check this:
-		 * Initializing variables for mySwapBlockSurface here rather than onCreate
-		 * Since the view is in the xml file, it will not inflate until after onCreate.
-		 */
 		
+	/*	
 		LayoutInflater myInflater = LayoutInflater.from(this);
 		
 		mySwapBlocksSurface = (SwapBlocksSurface) myInflater.inflate(
 				R.id.swapBlockSurface, null, false);
 		
-		
-//		mySwapBlocksSurface = (SwapBlocksSurface) findViewById(R.id.swapBlockSurface);
-		
-		
 		mySwapBlocksSurface.setOnTouchListener(this);
 		mySwapBlocksSurface.resume();
-		
+		*/
 	}
 
 	@Override
@@ -54,9 +47,21 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 		mySwapBlocksSurface.pause();
 	}
 
+	
+	/* 
+	 * Initializing variables for mySwapBlockSurface here rather than onCreate
+	 * Since the view is in the xml file, it will not inflate until after onCreate.
+	 */
+	
 	@Override
 	protected void onResume() {
 		super.onResume();
+		
+		mySwapBlocksSurface = (SwapBlocksSurface) findViewById(R.id.swapBlockSurface);
+		
+		
+		mySwapBlocksSurface.setOnTouchListener(this);
+		mySwapBlocksSurface.resume();
 		
 	}
 
