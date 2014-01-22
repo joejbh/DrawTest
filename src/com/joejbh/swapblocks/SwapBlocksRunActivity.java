@@ -1,19 +1,12 @@
 package com.joejbh.swapblocks;
 
-import java.util.zip.Inflater;
-
-import com.joejbh.swapblocks.R;
-
 import android.os.Bundle;
 import android.app.Activity;
-import android.content.Context;
 import android.graphics.Point;
 import android.view.Display;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
-import android.widget.RelativeLayout;
 
 public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 
@@ -27,18 +20,7 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_draw_test);
-		
-		
-	/*	
-		LayoutInflater myInflater = LayoutInflater.from(this);
-		
-		mySwapBlocksSurface = (SwapBlocksSurface) myInflater.inflate(
-				R.id.swapBlockSurface, null, false);
-		
-		mySwapBlocksSurface.setOnTouchListener(this);
-		mySwapBlocksSurface.resume();
-		*/
+		setContentView(R.layout.activity_draw_test);		
 	}
 
 	@Override
@@ -59,7 +41,6 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 		
 		mySwapBlocksSurface = (SwapBlocksSurface) findViewById(R.id.swapBlockSurface);
 		
-		
 		mySwapBlocksSurface.setOnTouchListener(this);
 		mySwapBlocksSurface.resume();
 		
@@ -67,8 +48,14 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 
 	public boolean onTouch(View view, MotionEvent event) {
 
+		// Checks if the surface is busy.
 		if (mySwapBlocksSurface.isFreeToMove()) {
+			
+			
 			switch (event.getActionMasked()) {
+			
+			// ACTION_DOWN is just the first finger to go down.  Therefore, we do not increment the number 
+			// of fingers. We simply set it to one.  ACTION_POINTER_DOWN is for extra fingers.
 			case MotionEvent.ACTION_DOWN:
 				
 				mySwapBlocksSurface.setNumberOfFingers(1);
@@ -78,22 +65,23 @@ public class SwapBlocksRunActivity extends Activity implements OnTouchListener {
 
 				break;
 
-			case MotionEvent.ACTION_MOVE:
+			case MotionEvent.ACTION_UP:
+				
+				// reduceNumberOfFingers works with multiple fingers, and is actually unnecessary.
+				// However, I keep it for possible future use.
+				mySwapBlocksSurface.reduceNumberOfFingers();
 				
 				mySwapBlocksSurface.setUpX(event.getX(0));
 				mySwapBlocksSurface.setUpY(event.getY(0));
 
-				mySwapBlocksSurface.setMoveCounter( (int) 
-						(mySwapBlocksSurface.getBlockWidth() / 
-						mySwapBlocksSurface.getMovementPixels()) );
-				break;
-
-			case MotionEvent.ACTION_UP:
-
-				mySwapBlocksSurface.movementPhase = SwapBlocksSurface.PHASE_HANDLE_MOVE;
+				// Prep variables necessary for movement.
 				mySwapBlocksSurface.setMovementVars();
-				mySwapBlocksSurface.reduceNumberOfFingers();
+				
+				// Start moving the blocks
+				mySwapBlocksSurface.phaseHandleMove();
+				
 				break;
+				
 			}
 		}
 		return true;

@@ -12,132 +12,182 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.widget.TextView;
 
+/**
+ * The SwapBlockSurface is comprised of blocks.  When two blocks are swapped, the surface checks if either
+ * of swapped blocks are touching a series of two or more blocks of the same color.  If so, the blocks explode
+ * and are replaced by a cascade of new blocks from above.
+ * 
+ * The blocks are shown on screen, but there is also a matrix of coordinates in order to keep track of appropriate
+ * places to draw the blocks.
+ * 
+ * The surface is a runnable that is in a continuous loop and is continuously drawing.  I have setup phases 
+ * flags to instruct the loop as to which series of commands it should run at any given point.  
+ * 
+ * The Phases:
+ * PHASE_HANDLE_MOVE: handle the movement of the blocks
+ * PHASE_SWAP_IN_MATRIX: swap the block object designations within the coordinates matrix.
+ * PHASE_TRIPLET_SEARCH: search for groups of three or more blocks in relation to the swapped blocks
+ * PHASE_IS_TRIPLET_FOUND: handles actions if a triplet is found
+ * PHASE_REVERSE_MVMNT_VARS: reverses variables if no triplet found
+ * PHASE_REVERSE_HANDLE_MOVE: handle movement of swapping blocks back if no triplet found
+ * PHASE_RESWAP_IN_MATRIX: swap blocks back to original location if no triplet was found
+ * PHASE_DROP: triplet found, destroy blocks, new blocks fall from above.  This phase is broken into four steps flags.
+ * PHASE_DONE_MOVE: 
+ * 
+ * @author Ibis
+ *
+ */
 public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
-	boolean phaseDebugIsOn = false;
-	boolean matchCheckDebugIsOn = false;
-	boolean tripletColorDebugIsOn = false;
-	boolean moveCounterDebugIsOn = false;
-	boolean phaseStepDebugIsOn = false;
+	private boolean phaseDebugIsOn = false;
+	private boolean phaseStepDebugIsOn = true;
+	private boolean matchCheckDebugIsOn = false;
+	private boolean tripletColorDebugIsOn = false;
+	private boolean moveCounterDebugIsOn = false;
+	private boolean destroyBlockDebugIsOn = false;
 	
-	public static final int PHASE_NULL = 0;
-	public static final int PHASE_HANDLE_MOVE = 1;
-	public static final int PHASE_SWAP_IN_MATRIX = 2;
-	public static final int PHASE_TRIPLET_SEARCH = 3;
-	public static final int PHASE_IS_TRIPLET_FOUND = 4;
-	public static final int PHASE_REVERSE_MVMNT_VARS = 5;
-	public static final int PHASE_REVERSE_HANDLE_MOVE = 6;
-	public static final int PHASE_RESWAP_IN_MATRIX = 7;
-	public static final int PHASE_DROP = 8;
-	public static final int PHASE_DONE_MOVE = 9;
+	private boolean phaseDebugNotNoted = true;
+	private boolean phaseStepDebugNotNoted = true;
+	
+	// Phase flags
+	private static final int PHASE_NULL = 0;
+	private static final int PHASE_HANDLE_MOVE = 1;
+	private static final int PHASE_SWAP_IN_MATRIX = 2;
+	private static final int PHASE_TRIPLET_SEARCH = 3;
+	private static final int PHASE_IS_TRIPLET_FOUND = 4;
+	private static final int PHASE_REVERSE_MVMNT_VARS = 5;
+	private static final int PHASE_REVERSE_HANDLE_MOVE = 6;
+	private static final int PHASE_RESWAP_IN_MATRIX = 7;
+	private static final int PHASE_DROP = 8;
+	private static final int PHASE_DONE_MOVE = 9;
 
-	public static final int PHASE_STEP_ONE = 1;
-	public static final int PHASE_STEP_TWO = 2;
-	public static final int PHASE_STEP_THREE = 3;
-	public static final int PHASE_STEP_FOUR = 4;
+	
+	// A lot happens in drop phase, so I broke it into four steps
+	private static final int PHASE_STEP_ONE = 1;
+	private static final int PHASE_STEP_TWO = 2;
+	private static final int PHASE_STEP_THREE = 3;
 
 	// This matrix keeps track of where the positioning of settled blocks can be.
 	// This variable is important because blocks are moved and shrink in
 	// fractions of block sizes, which sometimes is not an integer. During a move or
-	// shrinking, the intended final position may be lost.
-	Point myMatrixCoordinates[][];
+	// shrinking, the intended final position may be lost, but this keeps record of appropriate placement.
+	private Point myMatrixCoordinates[][];
 
-	int numberOfFingers = 0;
+	// Number of fingers recorded as touching the screen.  Never goes above 1, since there is no need to 
+	// track additional fingers.
+	public int numberOfFingers = 0;
 
+	// Where the finger used for indicating movement touched the screen and lifted from the screen in x & y coords.
 	private float downX = 0, downY = 0;
 	private float upX = 0, upY = 0;
-		
-	boolean swapInMotion = false;
-	boolean reversingVars = false;
-	boolean reverseInMotion = false;
-	boolean tripletSearchInSession = false;
-	boolean finishedFirstRootSearch = false;
-	boolean finishedSecondRootSearch = false;
+	
+	// Flags used to indicate that a particular action is in progress and conflicting actions should not take place.
+	private boolean swapInMotion = false;
+	private boolean reversingVars = false;
+	private boolean reverseInMotion = false;
+	private boolean tripletSearchInSession = false;
+	private boolean finishedFirstRootSearch = false;
+	private boolean finishedSecondRootSearch = false;
 
-	Bitmap bitmapG;
+	private Bitmap tmpBlockBmap;
 
-	Block tempBlock;
+	// Used for swapping blocks in matrix
+	private Block tempBlock;
 	
-	int numberOfColors = 4;
-	
-	String destroyTheseBlocks = "";
-	
+	private int numberOfColors = 4;
 	
 	private int blockWidth, blockHeight;
-		
-	String[] tripletColor = { "none", "none" };
 	
 	
-	private int moveCounter = -1; // This is the default number for when not to use
-							// moveCounter
 	
-	int destroyCounter = -1;
-	int shrinkCounter = 0;
+	// String for recording which blocks should be destroyed after finding triplets. 
+	private String destroyTheseBlocks = "";
+	
+	// If triplets found, records which colors are triplets.
+	private String[] tripletColor = { "none", "none" };
+	
+	// Whether or not a triplet has been found yet.
+	private boolean tripletFound = false;
+	
+	
+	
+	// A count down variable for managing movement of blocks
+	private int moveCounter = -1; 
 
-	private float movementPixels = 10; // This determines the speed of movement of the
-									// blocks. Higher = faster. Must be divisible into 100
+	// A count down variable for managing the shrinking of blocks during destruction.
+	private int destroyCounter = -1;
+	
+	// Shrink counter increases as destroyCounter decreases.  ShrinkCounter determines how to resize blocks
+	// while they're shrinking to blow up.
+	private int shrinkCounter = 0;
 
-	private int matrixRows, matrixColumns = 5;
+	
+	
+	// This determines the speed of movement of the blocks. Higher = faster. Must be divisible into 100
+	private float movementPixels = 10; 
 
+	private int matrixRows, matrixColumns;
+
+	
 	private MediaPlayer poofSound = MediaPlayer.create(getContext(), R.raw.poof);
 	private MediaPlayer shrinkSound = MediaPlayer.create(getContext(), R.raw.shrink);
 	
-	boolean shrinkSoundPlayed = false;
-	boolean poofSoundPlayed = false;
+	private boolean shrinkSoundPlayed = false;
+	private boolean poofSoundPlayed = false;
 	
 
-	// Movement Variables
+	// --------------------------
+	// --- Movement Variables ---
+	
 	private static final int FINISHED_MOVING = 1;
 
-	int movementDirection = 0;
+	
+	// movementDirection keeps track of the movement of the original block touched. 
+	private int movementDirection = 0;
 
+	// Flags for movementDirection
 	private static final int MOVE_NULL = 0;
 	private static final int MOVE_LEFT = 1;
 	private static final int MOVE_RIGHT = 2;
 	private static final int MOVE_UP = 3;
 	private static final int MOVE_DOWN = 4;
 
-	int activeCellRow = 999;
-	int activeCellColumn = 999;
+	// The original cell touched prior to movement.
+	private int activeCellRow = 999;
+	private int activeCellColumn = 999;
 
 	private static final int ACTIVE_CELL_NULL = 999;
-	// End Movement Variables
 
+	// --- End Movement Variables ---
+	// ------------------------------
+
+	
+	
 	// Phase Variables
-	int movementPhase = 0;
+	private int movementPhase = 0;
 
-	int phaseStep = 0;
+	private int phaseStep = 0;
+
+	// Used for recording if the user can do another move yet.
+	private boolean freeToMove = true;
 
 	// End Phase Variables
-
-	boolean swapSuccess = false;
-	private boolean freeToMove = true;
-	boolean tripletFound = false;
 
 
 	// An array of each column that will have blocks drop due to a block
 	// disappearing in the column.
-	int[] dropColumns;
-	String[] storeDrops;
+	private int[] dropColumns;
 	private static final int NO_DROP = 99;
 
-	TextView scoreTextView;
-
-	SurfaceHolder ourHolder;
-	Thread myThread = null;
-	boolean isRunning = false;
-
-	Block myBlockMatrix[][];
-
 	
-	public SwapBlocksSurface(Context context) {
-		super(context);
-		ourHolder = getHolder();
-		
-	}
+	private SurfaceHolder ourHolder;
+	private Thread myThread = null;
+	private boolean isRunning = false;
+
+	private Block myBlockMatrix[][];
 	
+	// These parameters are required in order to use SwapBlockSurface in an XML file.
 	public SwapBlocksSurface(Context context, AttributeSet attributeSet)
 	{
 	    super(context, attributeSet);
@@ -145,12 +195,8 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 	}
 	
 	
-	public SwapBlocksSurface(Context context, AttributeSet attrs, int defStyle) {
-	    super(context, attrs, defStyle);
-	    ourHolder = getHolder();
-	}
-	
-
+	// When the activity pauses, the thread needs to pause also.  
+	// The thread is joined and therefore stopped until further notice.
 	public void pause() {
 		Log.i("SwapBlockSurface State", "pause()");
 		
@@ -163,30 +209,31 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 			}
 			break;
 		}
-		myThread = null;
 	}
 
 	
-	// The current version of the app doesn't bother recording the screen setup
-	// between onPause's
+	// The current version of the app doesn't bother recording the screen setup between onPause's
 	// All default values are reset in resume().
 	public void resume() {
 		Log.i("SwapBlockSurface State", "resume()");
 
 		isRunning = true;
 		
+		// Start a new thread even if this is after a pause since the screen may have been reoriented.
+		// Normally, we would want to store the app state and re-display... but this is a demo.
 		myThread = new Thread(this);
 		myThread.start();
 	}
 
 	public void run() {
-		// Force a delay in order to allow proper loading time.
-		long startTime;
-		
+		// Force a delay in order to allow proper loading time.  Variable also used for tracking how long
+		// phases take to run.
+		long startTime, endTime;
+		long stepStartTime = 0, stepEndTime = 0;
 		startTime = System.nanoTime();
-
 		while (System.nanoTime() - startTime < 1000000000) {}
 
+		// The height and width of the surfaceView.
 		int viewHeight = this.getHeight();
 		int viewWidth = this.getWidth();
 		
@@ -200,29 +247,24 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 		// initialize variables.
 		myBlockMatrix = startGame(matrixRows, matrixColumns);
 
-
 		dropColumns = new int[matrixColumns];
-		storeDrops = new String[matrixColumns];
 		for (int i = 0; i < matrixColumns; i++){
 			dropColumns[i] = NO_DROP;
-			storeDrops[i] = "";
 		}
 		
-/*		DisplayMetrics metrics;
-		metrics = new DisplayMetrics();
-		WindowManager wManager = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
-		wManager.getDefaultDisplay().getMetrics(metrics);*/
 		
-		
-		Log.i("Hey", "Height= " + this.getHeight());
-		
+		// Here is where the App continues to loop during runtime:
 		while (isRunning) {
 			
 			if (!ourHolder.getSurface().isValid())
 				continue;
 			
+			// Lock the canvas during calculations and then the canvas is unlocked and redrawn thereafter. 
 			Canvas canvas = ourHolder.lockCanvas();
+			
+			// Background color
 			canvas.drawRGB(49, 98, 122);
+			
 			// This prints the full matrix of blocks
 			for (int i = 0; i < matrixRows; i++) {
 				for (int j = 0; j < matrixColumns; j++) {
@@ -231,6 +273,8 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 							myBlockMatrix[i][j].getY(), null);
 				}
 			}
+			
+			
 			// If movement has started, act according to what phase it is
 			switch (movementPhase) {
 
@@ -238,9 +282,12 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 				break;
 
+				
 			case PHASE_HANDLE_MOVE:
-				if (phaseDebugIsOn) {
+				startTime = System.nanoTime();
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
 					Log.i("phaseDebug", "Starting Phase: PHASE_HANDLE_MOVE");
+					phaseDebugNotNoted = false;
 				}
 
 				if (moveCounter != -1 && numberOfFingers == 0) {
@@ -251,8 +298,13 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 			case PHASE_SWAP_IN_MATRIX:
 
-				if (phaseDebugIsOn) {
+				endTime = System.nanoTime();
+				
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
 					Log.i("phaseDebug", "Starting Phase: PHASE_SWAP_IN_MATRIX");
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
 				}
 
 				if (swapInMotion == false) {
@@ -262,9 +314,14 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 				break;
 
 			case PHASE_TRIPLET_SEARCH:
+				
+				endTime = System.nanoTime();
 
-				if (phaseDebugIsOn) {
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
 					Log.i("phaseDebug", "Starting Phase: PHASE_TRIPLET_SEARCH");
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
 				}
 
 				if (tripletSearchInSession == false) {
@@ -316,14 +373,20 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 				if (finishedFirstRootSearch && finishedSecondRootSearch) {
 					movementPhase = PHASE_IS_TRIPLET_FOUND;
+					phaseDebugNotNoted = true;
 				}
 
 				break;
 
 			case PHASE_IS_TRIPLET_FOUND:
+				
+				endTime = System.nanoTime();
 
-				if (phaseDebugIsOn) {
-					Log.i("phaseDebug", "Starting Phase PHASE_IS_TRIPLET_FOUND");
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
+					Log.i("phaseDebug", "Starting Phase: PHASE_IS_TRIPLET_FOUND");
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
 				}
 
 				if (tripletFound) {
@@ -336,15 +399,21 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 				else {
 					movementPhase = PHASE_REVERSE_MVMNT_VARS;
+					phaseDebugNotNoted = true;
 					moveCounter = (int) (blockWidth / movementPixels);
 				}
 
 				break;
 
 			case PHASE_REVERSE_MVMNT_VARS:
+				
+				endTime = System.nanoTime();
 
-				if (phaseDebugIsOn) {
-					Log.i("phaseDebug", "Starting Phase 5");
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
+					Log.i("phaseDebug", "Starting Phase: PHASE_REVERSE_MVMNT_VARS");
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
 				}
 
 				if (reversingVars == false) {
@@ -354,9 +423,14 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 				break;
 
 			case PHASE_REVERSE_HANDLE_MOVE:
+				
+				endTime = System.nanoTime();
 
-				if (phaseDebugIsOn) {
-					Log.i("phaseDebug", "Starting Phase 6");
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
+					Log.i("phaseDebug", "Starting Phase: PHASE_REVERSE_HANDLE_MOVE");
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
 				}
 
 				if (moveCounter != -1 && numberOfFingers == 0) {
@@ -366,9 +440,14 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 				break;
 
 			case PHASE_RESWAP_IN_MATRIX:
+				
+				endTime = System.nanoTime();
 
-				if (phaseDebugIsOn) {
-					Log.i("phaseDebug", "Starting Phase 7");
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
+					Log.i("phaseDebug", "Starting Phase: PHASE_RESWAP_IN_MATRIX");
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
 					Log.i("phaseDebug", "reverseInMotion = " + reverseInMotion);
 				}
 
@@ -379,18 +458,24 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 				break;
 
 			case PHASE_DROP:
-
-				if (phaseDebugIsOn)
-					Log.i("phaseDebug", "Starting Drop Phase");
-
-				if (phaseStepDebugIsOn)
-					Log.i("READ ME", "phase step = " + phaseStep);
-
+				if (phaseDebugIsOn && phaseDebugNotNoted){
+					endTime = System.nanoTime();
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
+					Log.i("phaseDebug", "Starting Phase: PHASE_DROP");					
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
+				}
 
 				switch (phaseStep) {
 
 				case PHASE_STEP_ONE: // Make the destroyed blocks DISAPPEAR.
-
+					
+					if (phaseStepDebugIsOn && phaseStepDebugNotNoted){
+						stepStartTime = System.nanoTime();
+						Log.i("phaseStepDebug", "Starting Phase Step: PHASE_STEP_ONE");
+						phaseStepDebugNotNoted = false;
+					}
+					
 					for (int r = 0; r < matrixRows; r++) {
 						for (int c = 0; c < matrixColumns; c++) {
 
@@ -405,51 +490,53 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 										poofSoundPlayed = true;
 									}
 
-									bitmapG = BitmapFactory.decodeResource(
+									tmpBlockBmap = BitmapFactory.decodeResource(
 											getResources(),
 											R.drawable.block_gone);
-									bitmapG = Bitmap.createScaledBitmap(
-											bitmapG, blockWidth, blockHeight,
+									tmpBlockBmap = Bitmap.createScaledBitmap(
+											tmpBlockBmap, blockWidth, blockHeight,
 											true);
-									myBlockMatrix[r][c].setImage(bitmapG);
-									/*
-									 * Log.i("READ ME",
-									 * "Description of disappearing block: " );
-									 * Log.i("READ ME", "x = " +
-									 * myBlockMatrix[r][c].getX());
-									 * Log.i("READ ME", "y = " +
-									 * myBlockMatrix[r][c].getY());
-									 * Log.i("READ ME", "Color = " +
-									 * myBlockMatrix[r][c].getColor());
-									 * Log.i("READ ME", "Searched = " +
-									 * myBlockMatrix[r][c].getSearched());
-									 */
-
+									myBlockMatrix[r][c].setImage(tmpBlockBmap);
 								}
 							}
 						}
 					}
 					phaseStep = PHASE_STEP_TWO;
+					phaseStepDebugNotNoted = true;
 					break;
 
-				case PHASE_STEP_TWO: // Run thread which FINDS which cells
-										// are TO BE DROPPED.
-										// This thread also does some
-										// swapping of block designations.
+				
+				// Run thread which FINDS which cells are TO BE DROPPED. This thread also does some swapping of block designations.
+				case PHASE_STEP_TWO:
+					
+					if (phaseStepDebugIsOn && phaseStepDebugNotNoted){
+						stepEndTime = System.nanoTime();
+						Log.i("phaseStepDebug", "Phase Step took this long in nanoseconds: " + ( stepEndTime - stepStartTime));
+						Log.i("phaseStepDebug", "Starting Phase Step: PHASE_STEP_TWO");
+						phaseStepDebugNotNoted = false;
+						stepStartTime = System.nanoTime();
+					}
 
-					phaseStep = 0; // This will prevent this phase step from
-									// running again until the thread is
-									// finished.
-
+					// This will prevent this phase step from running again until the thread is finished.
+					phaseStep = 0; 
 			
 					checkDrop(myBlockMatrix);
 
 					phaseStep = PHASE_STEP_THREE;
+					phaseStepDebugNotNoted = true;
 					moveCounter = (int) (blockHeight / movementPixels);
 					
 					break;
 
 				case PHASE_STEP_THREE: // This part does the DROP MOVEMENT
+					
+					if (phaseStepDebugIsOn && phaseStepDebugNotNoted){
+						stepEndTime = System.nanoTime();
+						Log.i("phaseStepDebug", "Phase Step took this long in nanoseconds: " + ( stepEndTime - stepStartTime));
+						Log.i("phaseStepDebug", "Starting Phase Step: PHASE_STEP_THREE");
+						phaseStepDebugNotNoted = false;
+						stepStartTime = System.nanoTime();
+					}
 
 					if (moveCounterDebugIsOn)
 						Log.i("READ ME", "Move Counter = " + moveCounter);
@@ -497,8 +584,14 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 							}
 						}
 
-						if (phaseStep != PHASE_STEP_TWO)
+						if (phaseStep != PHASE_STEP_TWO){
 							movementPhase = PHASE_DONE_MOVE;
+							
+							if (phaseStepDebugIsOn){
+								stepEndTime = System.nanoTime();
+								Log.i("phaseStepDebug", "Phase Step took this long in nanoseconds: " + ( stepEndTime - stepStartTime));
+							}
+						}
 					}
 
 					break;
@@ -507,9 +600,14 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 				break;
 
 			case PHASE_DONE_MOVE:
+				
+				endTime = System.nanoTime();
 
-				if (phaseDebugIsOn) {
-					Log.i("phaseDebug", "Starting Done Move Phase");
+				if (phaseDebugIsOn && phaseDebugNotNoted) {
+					Log.i("phaseDebug", "Phase took this long in nanoseconds: " + (endTime - startTime) );
+					Log.i("phaseDebug", "Starting Phase: PHASE_DONE_MOVE");
+					startTime = System.nanoTime();
+					phaseDebugNotNoted = false;
 				}
 
 				doneMove(myBlockMatrix);
@@ -590,8 +688,18 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 		return blockMatrix;
 	}
+	
+	public void phaseHandleMove(){
+		movementPhase = PHASE_HANDLE_MOVE;
+		phaseDebugNotNoted = true;
+	}
+	
 
 	public void setMovementVars() {
+		
+		// Prep variables for tracking block movement
+		setMoveCounter( (int) ( getBlockWidth() / getMovementPixels() ) );
+		
 		float xChange, yChange;
 
 		xChange = upX - downX;
@@ -616,6 +724,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 				// right-most cell, end the move
 				else {
 					movementPhase = PHASE_DONE_MOVE;
+					phaseDebugNotNoted = true;
 				}
 			}
 
@@ -628,6 +737,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 					movementDirection = MOVE_LEFT;
 				} else {
 					movementPhase = PHASE_DONE_MOVE;
+					phaseDebugNotNoted = true;
 				}
 			}
 		}
@@ -647,6 +757,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 				// end the move
 				else {
 					movementPhase = PHASE_DONE_MOVE;
+					phaseDebugNotNoted = true;
 				}
 			}
 
@@ -658,6 +769,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 					movementDirection = MOVE_UP;
 				} else {
 					movementPhase = PHASE_DONE_MOVE;
+					phaseDebugNotNoted = true;
 				}
 			}
 		}
@@ -687,6 +799,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 		}
 
 		movementPhase = PHASE_REVERSE_HANDLE_MOVE;
+		phaseDebugNotNoted = true;
 	}
 
 	public void handleMove(Block myBlockMatrix[][]) {
@@ -775,10 +888,12 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 			if (movementPhase == PHASE_HANDLE_MOVE) {
 				movementPhase = PHASE_SWAP_IN_MATRIX;
+				phaseDebugNotNoted = true;
 			}
 
 			else if (movementPhase == PHASE_REVERSE_HANDLE_MOVE) {
 				movementPhase = PHASE_RESWAP_IN_MATRIX;
+				phaseDebugNotNoted = true;
 			}
 		}
 
@@ -829,17 +944,16 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 
 			break;
 		}
-
-		// Once block implosion enabled, delete line below and remove comment
-		// block below
-//		movementPhase = PHASE_DONE_MOVE;
-
-		//
 		
-		 if(movementPhase == PHASE_SWAP_IN_MATRIX) 
-			 movementPhase = PHASE_TRIPLET_SEARCH; 
-		 else if (movementPhase == PHASE_RESWAP_IN_MATRIX)
+		 if(movementPhase == PHASE_SWAP_IN_MATRIX){
+			 movementPhase = PHASE_TRIPLET_SEARCH;
+			 phaseDebugNotNoted = true;
+		 }
+		 else if (movementPhase == PHASE_RESWAP_IN_MATRIX){
 			 movementPhase = PHASE_DONE_MOVE;
+			 phaseDebugNotNoted = true;
+		 }
+			 
 	}
 
 	public boolean tripletSearchGoingUp(Block myBlockMatrix[][], int cellRow,
@@ -1281,9 +1395,6 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 					if (myBlockMatrix[r][c].getSearched() == true
 							&& (myBlockMatrix[r][c].getColor() == tripletColor[0] 
 									|| myBlockMatrix[r][c].getColor() == tripletColor[1])) {
-
-						
-						storeDrops[c] = storeDrops[c] + r;
 						
 						if (myBlockMatrix[r][c].getColor() == "Red")							
 							destroyTheseBlocks = destroyTheseBlocks + r + c + "r";
@@ -1334,14 +1445,15 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 			if (blockColor == 'y')
 				bitmap = BitmapFactory.decodeResource(getResources(), R.drawable.block_yellow);
 			
-			
 			bitmap = Bitmap.createScaledBitmap(bitmap, blockWidth - (shrinkCounter), 
 					blockHeight - (shrinkCounter), true);  // Resize background to fit the screen.
 			myBlockMatrix[r][c].setImage(bitmap);
 
-			Log.i("READ ME", "Before, X is: "
-					+ myBlockMatrix[r][c].getX());
-
+			if (destroyBlockDebugIsOn){
+				Log.i("READ ME", "Before, X is: "
+						+ myBlockMatrix[r][c].getX());	
+			}
+			
 			myBlockMatrix[r][c]
 					.setX(myBlockMatrix[r][c].getX()
 							+ (float) (movementPixels / 2));
@@ -1349,8 +1461,10 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 					.setY(myBlockMatrix[r][c].getY()
 							+ (float) (movementPixels / 2));
 
-			Log.i("READ ME", "After, X is: "
-					+ myBlockMatrix[r][c].getX());
+			if (destroyBlockDebugIsOn){
+				Log.i("READ ME", "After, X is: "
+						+ myBlockMatrix[r][c].getX());
+			}
 		}
 
 		if (destroyCounter == FINISHED_MOVING) {
@@ -1380,6 +1494,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 			}
 			moveCounter = (int) (blockWidth / movementPixels);
 			movementPhase = PHASE_DROP;
+			phaseDebugNotNoted = true;
 			phaseStep = PHASE_STEP_ONE;
 		}
 
@@ -1393,148 +1508,6 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 		int randomInt = 0;
 		Bitmap bitmap;
 
-		/*for (int column = 0; column < matrixColumns; column++){
-			
-			if (storeDrops[column].isEmpty())
-				dropColumns[column] = NO_DROP;
-			else{
-				// The rows that need to have a drop take place are stored as a string.
-				int dropRow = storeDrops[column].charAt(0) - '0';
-				storeDrops[column] = storeDrops[column].substring(1);
-				
-				dropColumns[column] = dropRow;
-				
-				// Once the block to be dropped has been found, put it
-				// at the top, and reassign which Matrix coordinates
-				// point to which Blocks.
-				tempBlock = myBlockMatrix[dropRow][column];
-				while (dropRow > 0) {
-					myBlockMatrix[dropRow][column] = myBlockMatrix[dropRow - 1][column];
-					dropRow--;
-				}
-	
-				randomInt = 1 + randomGenerator.nextInt(numberOfColors);
-	
-				// Randomly determine the color of the block and do
-				// appropriate assignments.
-				switch (randomInt) {
-					case 1:
-						tempBlock.setColor("Red");
-						bitmap = BitmapFactory.decodeResource(
-								getResources(), R.drawable.block_red);
-						bitmap = Bitmap.createScaledBitmap(bitmap,
-								blockWidth, blockHeight, true);
-						tempBlock.setImage(bitmap);
-						tempBlock.setSearched(false);
-						break;
-					case 2:
-						tempBlock.setColor("Green");
-						bitmap = BitmapFactory.decodeResource(
-								getResources(), R.drawable.block_green);
-						bitmap = Bitmap.createScaledBitmap(bitmap,
-								blockWidth, blockHeight, true);
-						tempBlock.setImage(bitmap);
-						tempBlock.setSearched(false);
-						break;
-					case 3:
-						tempBlock.setColor("Blue");
-						bitmap = BitmapFactory.decodeResource(
-								getResources(), R.drawable.block_blue);
-						bitmap = Bitmap.createScaledBitmap(bitmap,
-								blockWidth, blockHeight, true);
-						tempBlock.setImage(bitmap);
-						tempBlock.setSearched(false);
-						break;
-					case 4:
-						tempBlock.setColor("Yellow");
-						bitmap = BitmapFactory.decodeResource(
-								getResources(), R.drawable.block_yellow);
-						bitmap = Bitmap.createScaledBitmap(bitmap,
-								blockWidth, blockHeight, true);
-						tempBlock.setImage(bitmap);
-						tempBlock.setSearched(false);
-						break;
-				}
-	
-				tempBlock.setY(0 - blockHeight);
-				myBlockMatrix[0][column] = tempBlock;
-//				break;
-			}
-		}*/
-		
-		// Loop through each column, starting from the bottom. Look for a
-				// block that has been destroyed and note it as a dropColumn
-				for (int c = 0; c < matrixColumns; c++) {
-					for (int r = matrixRows - 1; r >= 0; r--) {
-						if (myBlockMatrix[r][c].getSearched() == true
-								&& (myBlockMatrix[r][c].getColor() == tripletColor[0] || myBlockMatrix[r][c]
-										.getColor() == tripletColor[1])) {
-							dropColumns[c] = r;
-
-							// Once the block to be dropped has been found, put it
-							// at the top, and reassign which Matrix coordinates
-							// point to which Blocks.
-							tempBlock = myBlockMatrix[r][c];
-							while (r > 0) {
-								myBlockMatrix[r][c] = myBlockMatrix[r - 1][c];
-								r--;
-							}
-
-							randomInt = 1 + randomGenerator.nextInt(numberOfColors);
-
-							// Randomly determine the color of the block and do
-							// appropriate assignments.
-							switch (randomInt) {
-								case 1:
-									tempBlock.setColor("Red");
-									bitmap = BitmapFactory.decodeResource(
-											getResources(), R.drawable.block_red);
-									bitmap = Bitmap.createScaledBitmap(bitmap,
-											blockWidth, blockHeight, true);
-									tempBlock.setImage(bitmap);
-									tempBlock.setSearched(false);
-									break;
-								case 2:
-									tempBlock.setColor("Green");
-									bitmap = BitmapFactory.decodeResource(
-											getResources(), R.drawable.block_green);
-									bitmap = Bitmap.createScaledBitmap(bitmap,
-											blockWidth, blockHeight, true);
-									tempBlock.setImage(bitmap);
-									tempBlock.setSearched(false);
-									break;
-								case 3:
-									tempBlock.setColor("Blue");
-									bitmap = BitmapFactory.decodeResource(
-											getResources(), R.drawable.block_blue);
-									bitmap = Bitmap.createScaledBitmap(bitmap,
-											blockWidth, blockHeight, true);
-									tempBlock.setImage(bitmap);
-									tempBlock.setSearched(false);
-									break;
-								case 4:
-									tempBlock.setColor("Yellow");
-									bitmap = BitmapFactory.decodeResource(
-											getResources(), R.drawable.block_yellow);
-									bitmap = Bitmap.createScaledBitmap(bitmap,
-											blockWidth, blockHeight, true);
-									tempBlock.setImage(bitmap);
-									tempBlock.setSearched(false);
-									break;
-							}
-
-							tempBlock.setY(0 - blockHeight);
-							myBlockMatrix[0][c] = tempBlock;
-//							break;
-						}
-					}
-				}
-	}
-		
-		
-		
-		
-		/*
 		
 		// Loop through each column, starting from the bottom. Look for a
 		// block that has been destroyed and note it as a dropColumn
@@ -1602,7 +1575,8 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 					break;
 				}
 			}
-		}*/
+		}
+	}
 	
 	
 	public void doneMove(Block myBlockMatrix[][]) {
@@ -1623,6 +1597,7 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 		activeCellRow = ACTIVE_CELL_NULL;
 		activeCellColumn = ACTIVE_CELL_NULL;
 		movementPhase = PHASE_NULL;
+		phaseDebugNotNoted = true;
 
 		reversingVars = false;
 		reverseInMotion = false;
@@ -1635,6 +1610,8 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 		tripletSearchInSession = false;
 		finishedFirstRootSearch = false;
 		finishedSecondRootSearch = false;
+		
+		phaseStepDebugNotNoted = true;
 
 		for (int i = 0; i < matrixRows; i++) {
 			for (int j = 0; j < matrixColumns; j++) {
@@ -1647,11 +1624,11 @@ public class SwapBlocksSurface extends SurfaceView implements Runnable {
 	}
 	
 
-	void setNumberOfFingers(int numberOfFingers) {
+	public void setNumberOfFingers(int numberOfFingers) {
 		this.numberOfFingers = numberOfFingers;
 	}
 
-	void reduceNumberOfFingers() {
+	public void reduceNumberOfFingers() {
 		this.numberOfFingers--;
 	}
 
